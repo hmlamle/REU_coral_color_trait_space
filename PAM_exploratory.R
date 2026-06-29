@@ -7,7 +7,7 @@ library(tidyverse)
 library(ggplot2)
 library(readxl)
 
-master <- read.csv("final_ssid_assignments_06022026.csv")
+master <- read.csv("final_ssid_assignments_06062026.csv")
 pam <- read_excel("PAM_TP1.xlsx") 
 
 
@@ -22,7 +22,7 @@ pam_dist_tank <- ggplot(pam, aes(tank, Y, fill=tank)) +
   geom_violin()
 
 pam_dist_tank
-ggsave("PAM_TP1_tank.png", pam_dist_tank, width = 8, height = 5, units = "in")
+ggsave("figs/PAM_TP1_tank.png", pam_dist_tank, width = 8, height = 5, units = "in")
 
 # PAM distributions by site: 
 
@@ -45,5 +45,6 @@ pam_dist_site <- ggplot(pam2, aes(site, Y, fill=site)) +
   
 
 pam_dist_site
-ggsave("PAM_TP1.png", pam_dist_site, width = 8, height = 5, units = "in")
+ggsave("figs/PAM_TP1.png", pam_dist_site, width = 8, height = 5, units = "in")
+
 
