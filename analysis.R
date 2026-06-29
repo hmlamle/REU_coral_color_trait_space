@@ -90,7 +90,7 @@ str(CHROMA_long)
 
 
 # ------------------- Run Correlations: ------------------------------
-
+## ------------------- Linear Model stats: ---------------------------
 
 regressions <- CHROMA_long %>%
   group_by(Index) %>%
@@ -117,7 +117,7 @@ results <- left_join(slopes, r2, by = "Index") %>%
   arrange(desc(adj.r.squared))
 
 
-# plotting: 
+##  Plotting: 
 
 red_channel <- ggplot(CHROMA, aes(R, Y)) +
   geom_point() +
@@ -157,6 +157,32 @@ VARI <- ggplot(CHROMA, aes((G-R)/(R+G-B), Y)) +
        y = "Fv/Fm")
 VARI
 ggsave("figs/VARI_PAM.png", VARI, width = 6, height = 5, units = "in")
+
+red_minus_green <- ggplot(CHROMA, aes(`R-G`, Y, colour = site)) +
+  geom_point() +
+  geom_smooth(method = lm) +
+  labs(title = "Correlation of Red minus green index with photosynthetic efficiency",
+       y = "Fv/Fm") +
+  facet_wrap(~site)
+red_minus_green
+ggsave("figs/VARI_PAM.png", VARI, width = 6, height = 5, units = "in")
+
+red_minus_blue <- ggplot(CHROMA, aes(`R-B`, Y, colour = site)) +
+  geom_point() +
+  geom_smooth(method = lm) +
+  labs(title = "Correlation of Red minus blue index with photosynthetic efficiency",
+       y = "Fv/Fm") +
+  facet_wrap(~site)
+red_minus_blue
+
+
+CHROMA %>%
+  count(site)
+
+## ------------------------ Site-wise comparisons: ---------------------
+
+
+
 
 
 
