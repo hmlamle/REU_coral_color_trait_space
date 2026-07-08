@@ -191,7 +191,7 @@ TempandDepth <- read_excel("TEMPANDDEPTH.xlsx")
 
 CL <- merge(CHROMA, location, by = "site")
 
-combined_df <- merge(CL, TempandDepth, by = "fragment_id")
+combined_df <- merge(CL, TempandDepth, by = "fragment_id") #not sure why but this introduces more observations
 #----------------------- Plot PAM with Latitude -------------------------------
 
 pamlat <- ggplot(combined_df, aes(longitude, Y, color = site)) +
@@ -243,72 +243,8 @@ pamtemp <- ggplot(combined_df, aes(temp_C, Y, color = site)) +
            label.x = 24, label.y = 2)
 pamtemp
 
-#--------------------PAM ANOVA and Tukey----------------------------------------
-
-  anova_pam <- aov(Y ~ site, data = combined_df)
-  summary(anova_pam)
-
-pamtukey <- TukeyHSD(anova_pam)
-
-pamcld <- multcompLetters4(anova_pam, pamtukey)
-
-pamletter_data <- combined_df %>%
-  group_by(site) %>%
-  summarise(
-    max_val = max(Y),
-    third_q = quantile(Y, 0.75),
-    .groups = 'drop'
-  )
-pamletters_df <- data.frame(Letters = cld$site$Letters)
-pamletters_df$site <- rownames(letters_df)
-
-pamletter_data <- left_join(pamletter_data, pamletters_df, by = "site")
-
-pam <- ggplot(combined_df, aes(x = site, y = Y)) +
-  geom_boxplot(aes(fill = site), alpha = 0.7) +
-  theme_minimal() +
-  geom_text(data = pamletter_data, 
-            aes(x = site, y = third_q + 0.2, label = Letters), # Adjust y offset as needed
-            size = 5, fontface = "bold", vjust = 0) +
-  labs(title = "Comparing Photosynthetic Efficiency by Site",
-       y = "Fv/Fm", x = "Site")
-pam
-
-ggsave("figs/pambysite.png", pam, width = 10, height = 8, units = "in")
-#-------------------Red ANOVA and Tukey-----------------------------------------
-cleanred <- combined_df %>% #remove na values for red
-  filter(R != "na") %>%
-  filter(R != "NA")
-
-anova_red <- aov(R ~ site, data = cleanred)
-summary(anova_red)
-
-TukeyHSD(anova_red)
-
-#------------------Green ANOVA and Tukey----------------------------------------
-cleangreen <- combined_df %>% #remove na values for green
-  filter(G != "na") %>%
-  filter(G != "NA")
-
-anova_green <- aov(B ~ site, data = cleangreen)
-summary(anova_green)
-
-TukeyHSD(anova_green)
-
-#------------------Blue ANOVA and Tukey-----------------------------------------
-cleanblue <- combined_df %>% #remove na values for blue
-  filter(B != "na") %>%
-  filter(B != "NA")
-
-anova_blue <- aov(B ~ site, data = cleanblue)
-summary(anova_blue)
-
-TukeyHSD(anova_blue)
-
-
-
-#------------------R-G ANOVA and Tukey------------------------------------------
-combined_df <- combined_df %>% 
+#--------------------Add Color Data---------------------------------------------
+colordata <- CHROMA %>% 
   mutate(across(c(2:4), as.factor)) %>%    # changed the columns for our df
   mutate(across(c(5:10), as.numeric)) %>%  # added this for the RGB data that came in as characters 
   dplyr::mutate(
@@ -330,11 +266,83 @@ combined_df <- combined_df %>%
     `(G-R)/(R+G-B)` = (G-R)/(R+G-B)
   )
 
-cleanrminusg <- combined_df %>%
+colordata <- colordata %>%    #changes JR to RJ
+  mutate(site = case_match(site, "JR's Ledge" ~ "RJ's Ledge", .default = site))
+#--------------------PAM ANOVA and Tukey----------------------------------------
+
+  anova_pam <- aov(Y ~ site, data = colordata)
+  summary(anova_pam)
+
+pamtukey <- TukeyHSD(anova_pam)
+
+pamcld <- multcompLetters4(anova_pam, pamtukey)
+
+pamletter_data <- colordata %>%
+  group_by(site) %>%
+  summarise(
+    max_val = max(Y),
+    third_q = quantile(Y, 0.75),
+    .groups = 'drop'
+  )
+pamletters_df <- data.frame(Letters = pamcld$site$Letters)
+pamletters_df$site <- rownames(pamletters_df)
+
+pamletter_data <- left_join(pamletter_data, pamletters_df, by = "site")
+
+pam <- ggplot(colordata, aes(x = site, y = Y)) +
+  geom_boxplot(aes(fill = site), alpha = 0.7) +
+  theme_minimal() +
+  geom_text(data = pamletter_data, 
+            aes(x = site, y = third_q + 0.2, label = Letters), # Adjust y offset as needed
+            size = 5, fontface = "bold", vjust = 0) +
+  labs(title = "Comparing Photosynthetic Efficiency by Site",
+       y = "Fv/Fm", x = "Site") +
+  theme(
+    plot.title = element_text(size = 25),      # Changes main title size
+    axis.title = element_text(size = 18),      # Changes both X and Y axis labels size
+    axis.text = element_text(size = 9)        # Changes both X and Y axis tick marks size
+  )
+pam
+
+ggsave("figs/pambysite.png", pam, width = 12, height = 8, units = "in")
+#-------------------Red ANOVA and Tukey-----------------------------------------
+cleanred <- colordata %>% #remove na values for red
+  filter(R != "na") %>%
+  filter(R != "NA")
+
+anova_red <- aov(R ~ site, data = cleanred)
+summary(anova_red)
+
+TukeyHSD(anova_red)
+
+#------------------Green ANOVA and Tukey----------------------------------------
+cleangreen <- colordata %>% #remove na values for green
+  filter(G != "na") %>%
+  filter(G != "NA")
+
+anova_green <- aov(B ~ site, data = cleangreen)
+summary(anova_green)
+
+TukeyHSD(anova_green)
+
+#------------------Blue ANOVA and Tukey-----------------------------------------
+cleanblue <- colordata %>% #remove na values for blue
+  filter(B != "na") %>%
+  filter(B != "NA")
+
+anova_blue <- aov(B ~ site, data = cleanblue)
+summary(anova_blue)
+
+TukeyHSD(anova_blue)
+
+
+
+#------------------R-G ANOVA and Tukey------------------------------------------
+cleanrminusg <- colordata %>%
   filter(R-G != "na") %>%
   filter(R-G != "NA")
 
-anova_redminusgreen <- aov(`R-G` ~ site, data = cleanrminusg)
+anova_redminusgreen <- aov(R-G ~ site, data = cleanrminusg)
 summary(anova_redminusgreen)
 
 rminusgtukey <- TukeyHSD(anova_redminusgreen)
@@ -353,14 +361,32 @@ rminusgletters_df$site <- rownames(rminusgletters_df)
 
 rminusgletter_data <- left_join(rminusgletter_data, rminusgletters_df, by = "site")
 
-rminusg <- ggplot(combined_df, aes(x = site, y = `R-G`)) +
+rminusg <- ggplot(colordata, aes(x = site, y = `R-G`)) +
   geom_boxplot(aes(fill = site), alpha = 0.7) +
   theme_minimal() +
   geom_text(data = rminusgletter_data, 
             aes(x = site, y = third_q + 0.2, label = Letters), # Adjust y offset as needed
             size = 5, fontface = "bold", vjust = 0) +
-  labs(title = "Comparing R-G by Site",
-       y = "R-G", x = "Site")
+  labs(title = "Red Minus Green Index by Site",
+       y = "R-G", x = "Site") +
+  theme(
+    plot.title = element_text(size = 25),      # Changes main title size
+    axis.title = element_text(size = 18),      # Changes both X and Y axis labels size
+    axis.text = element_text(size = 9)        # Changes both X and Y axis tick marks size
+  )
 rminusg
 
-ggsave("figs/rminusgbysite.png", rminusg, width = 10, height = 8, units = "in")
+ggsave("figs/rminusgbysite.png", rminusg, width = 12, height = 8, units = "in")
+
+#------------------------Indices PAM Plots-------------------------------------------
+red_minus_green <- ggplot(cleanrminusg, aes(R-G, Y)) + #red minus green with pam r^2 = 0.11
+  geom_point() +
+  geom_smooth(method = lm) +
+  labs(title = "Correlation of Red Minus Green Index With Photosynthetic Efficiency",
+       y = "Fv/Fm") +
+  stat_cor(aes(label = paste(after_stat(rr.label), after_stat(p.label), sep = "~`,`~")),
+           label.x = 35, label.y = 200)
+red_minus_green
+ggsave("figs/R-G_PAM.png", red_minus_green, width = 12, height = 8, units = "in")
+
+
