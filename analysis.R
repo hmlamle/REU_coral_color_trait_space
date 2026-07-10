@@ -17,6 +17,9 @@ library(ggpubr)
 library(scales)
 library(dplyr)
 library(multcompView)
+library(gt)
+library(webshot2)
+library(viridis)
 
 # load joined PAM and RGB dataframe (we did this by hand due to having 
 # multiple frags and because of the naming difference between the 
@@ -60,8 +63,20 @@ CHROMA <- CHROMA %>%
     `(G-R)/(G+R)` = (G - R) / (G + R),
     `(G-B)/(G+B)` = (G - B) / (G + B),
     `R/(G+B)` = ifelse((G + B) > 0, R / (G + B), NA_real_),
-    `(G-R)/(R+G-B)` = (G-R)/(R+G-B)
+    `(G-R)/(R+G-B)` = (G-R)/(R+G-B),
+    Y = `Y`/1000
   )
+CHROMA <- CHROMA %>%    #changes JR to RJ
+  mutate(site = case_match(site, "JR's Ledge" ~ "RJ's Ledge", .default = site))
+
+site_order <- c(
+  "Caves", "BAR", "Hollywood", "Dania", "Graceland",
+  "Reverse Reef", "South Canyon", "Dodge Island",
+  "RJ's Ledge", "Emerald Reef"
+)
+
+CHROMA <- CHROMA %>%
+  mutate(site = factor(site, levels = site_order))
 
 # transform the data to long format: 
 
@@ -119,6 +134,47 @@ r2 <- regressions %>%
 
 results <- left_join(slopes, r2, by = "Index") %>%
   arrange(desc(adj.r.squared))
+
+correlationdata <- results %>%
+  select(-term, -estimate, -std.error, -statistic, -adj.r.squared)
+
+correlationdata <- correlationdata %>%
+  mutate(`Index` = as.character(`Index`)) 
+
+correlationdata %>%
+  ungroup() %>%   # remove tibble grouping
+  gt() %>%
+  tab_style(
+    style = cell_text(color = "red"),
+    locations = cells_body(rows = 3)) %>%
+  tab_style(
+    style = cell_text(color = "blue"),
+    locations = cells_body(rows = 2)) %>%
+  tab_style(
+    style = cell_text(color = "green"),
+    locations = cells_body(rows = 1)) %>%
+  cols_label(
+    Index = "RGB Index",
+    p.value = "P-value",
+    r.squared = html("R&sup2;") 
+    ) %>%
+  cols_width(
+    Index ~ px(180),
+    p.value ~ px(150),
+    r.squared ~ px(100)
+  ) %>%
+  tab_header(
+    title = "Correlation of PAM Measurements with RGB Indices"
+  ) %>%
+  tab_options(
+    table.border.top.style = "solid",
+    table.border.bottom.style = "solid",
+    table.margin.left = px(20),
+    table.margin.right = px(20)
+  ) %>%
+  opt_table_outline() %>%
+gtsave("PAM_RGB_Correlation_Table.png", vwidth = 700, vheight = 500, path = "C:/Users/kddea/Desktop/EPASeagrantCoralImages/REU_coral_color_trait_space/figs")
+
 
 
 ##  Plotting: 
@@ -243,65 +299,54 @@ pamtemp <- ggplot(combined_df, aes(temp_C, Y, color = site)) +
            label.x = 24, label.y = 2)
 pamtemp
 
-#--------------------Add Color Data---------------------------------------------
-colordata <- CHROMA %>% 
-  mutate(across(c(2:4), as.factor)) %>%    # changed the columns for our df
-  mutate(across(c(5:10), as.numeric)) %>%  # added this for the RGB data that came in as characters 
-  dplyr::mutate(
-    Grayscale = round(0.299 * R + 0.587 * G + 0.114 * B, 2),
-    r = R / (R + G + B),
-    g = G / (R + G + B),
-    b = B / (R + G + B),
-    `R+G` = R + G,
-    `R+B` = R + B,
-    `R-G` = R - G,
-    `R-B` = R - B,
-    `R/G` = ifelse(G > 0, R / G, NA_real_),
-    `G/R` = ifelse(R > 0, G / R, NA_real_),
-    `(R-G)/(R+G)` = (R - G) / (R + G),
-    `(R-B)/(R+B)` = (R - B) / (R + B),
-    `(G-R)/(G+R)` = (G - R) / (G + R),
-    `(G-B)/(G+B)` = (G - B) / (G + B),
-    `R/(G+B)` = ifelse((G + B) > 0, R / (G + B), NA_real_),
-    `(G-R)/(R+G-B)` = (G-R)/(R+G-B)
-  )
 
-colordata <- colordata %>%    #changes JR to RJ
-  mutate(site = case_match(site, "JR's Ledge" ~ "RJ's Ledge", .default = site))
 #--------------------PAM ANOVA and Tukey----------------------------------------
 
-  anova_pam <- aov(Y ~ site, data = colordata)
+  anova_pam <- aov(Y ~ site, data = CHROMA)
   summary(anova_pam)
 
 pamtukey <- TukeyHSD(anova_pam)
 
 pamcld <- multcompLetters4(anova_pam, pamtukey)
 
-pamletter_data <- colordata %>%
+pamletter_data <- CHROMA %>%
   group_by(site) %>%
   summarise(
-    max_val = max(Y),
     third_q = quantile(Y, 0.75),
     .groups = 'drop'
   )
-pamletters_df <- data.frame(Letters = pamcld$site$Letters)
-pamletters_df$site <- rownames(pamletters_df)
+pamletters_df <- data.frame(
+  site = names (pamcld$site$Letters), 
+  Letters = pamcld$site$Letters
+                            )
 
 pamletter_data <- left_join(pamletter_data, pamletters_df, by = "site")
 
-pam <- ggplot(colordata, aes(x = site, y = Y)) +
-  geom_boxplot(aes(fill = site), alpha = 0.7) +
+
+pam <- ggplot(CHROMA, aes(x = Y, y = site)) +
+  annotate("rect",
+           xmin = 0.5, xmax = Inf,
+           ymin = -Inf, ymax = Inf,
+           fill = "forestgreen", alpha = 0.15) +
+  
+  annotate("rect",
+           xmin = -Inf, xmax = 0.5,
+           ymin = -Inf, ymax = Inf,
+           fill = "tomato", alpha = 0.15)+
+ geom_boxplot(aes(fill = site), alpha = 1) +
   theme_minimal() +
   geom_text(data = pamletter_data, 
-            aes(x = site, y = third_q + 0.2, label = Letters), # Adjust y offset as needed
-            size = 5, fontface = "bold", vjust = 0) +
+            aes(x = third_q + 0.007, y = site, label = Letters), # Adjust y offset as needed
+            size = 5, fontface = "bold") + 
   labs(title = "Comparing Photosynthetic Efficiency by Site",
-       y = "Fv/Fm", x = "Site") +
+       y = 'site', x = "Fv/Fm") +
+  theme_classic() +
   theme(
     plot.title = element_text(size = 25),      # Changes main title size
-    axis.title = element_text(size = 18),      # Changes both X and Y axis labels size
-    axis.text = element_text(size = 9)        # Changes both X and Y axis tick marks size
-  )
+    axis.title = element_text(size = 22),      # Changes both X and Y axis labels size
+    axis.text = element_text(size = 18),     # Changes both X and Y axis tick marks size
+  ) +
+  scale_fill_viridis_d(option = "turbo")
 pam
 
 ggsave("figs/pambysite.png", pam, width = 12, height = 8, units = "in")
@@ -338,7 +383,7 @@ TukeyHSD(anova_blue)
 
 
 #------------------R-G ANOVA and Tukey------------------------------------------
-cleanrminusg <- colordata %>%
+cleanrminusg <- CHROMA %>%
   filter(R-G != "na") %>%
   filter(R-G != "NA")
 
@@ -352,41 +397,195 @@ rminusgcld <- multcompLetters4(anova_redminusgreen, rminusgtukey)
 rminusgletter_data <- cleanrminusg %>%
   group_by(site) %>%
   summarise(
-    max_val = max(`R-G`),
+   # max_val = max(`R-G`),
     third_q = quantile(`R-G`, 0.75),
     .groups = 'drop'
   )
-rminusgletters_df <- data.frame(Letters = rminusgcld$site$Letters)
-rminusgletters_df$site <- rownames(rminusgletters_df)
+rminusgletters_df <- data.frame(site = names (rminusgcld$site$Letters),
+  Letters = rminusgcld$site$Letters)
+#rminusgletters_df$site <- rownames(rminusgletters_df)
 
 rminusgletter_data <- left_join(rminusgletter_data, rminusgletters_df, by = "site")
 
-rminusg <- ggplot(colordata, aes(x = site, y = `R-G`)) +
-  geom_boxplot(aes(fill = site), alpha = 0.7) +
+rminusg <- ggplot(CHROMA, aes(x = `R-G`, y = site)) +
+  geom_boxplot(aes(fill = site), alpha = 1) +
   theme_minimal() +
   geom_text(data = rminusgletter_data, 
-            aes(x = site, y = third_q + 0.2, label = Letters), # Adjust y offset as needed
-            size = 5, fontface = "bold", vjust = 0) +
+            aes(x = third_q + 0.4, y = site, label = Letters), # Adjust y offset as needed
+            size = 5, fontface = "bold") + 
   labs(title = "Red Minus Green Index by Site",
-       y = "R-G", x = "Site") +
+       y = "Site", x = "R-G") +
+  theme_classic() +
   theme(
     plot.title = element_text(size = 25),      # Changes main title size
-    axis.title = element_text(size = 18),      # Changes both X and Y axis labels size
-    axis.text = element_text(size = 9)        # Changes both X and Y axis tick marks size
-  )
+    axis.title = element_text(size = 22),      # Changes both X and Y axis labels size
+    axis.text = element_text(size = 18)      # Changes both X and Y axis tick marks size
+  ) +
+  scale_fill_viridis_d(option = "turbo")
 rminusg
 
 ggsave("figs/rminusgbysite.png", rminusg, width = 12, height = 8, units = "in")
 
 #------------------------Indices PAM Plots-------------------------------------------
-red_minus_green <- ggplot(cleanrminusg, aes(R-G, Y)) + #red minus green with pam r^2 = 0.11
+red_minus_green <- ggplot(cleanrminusg, aes(`R-G`, Y)) + #red minus green with pam r^2 = 0.11`R-G`
   geom_point() +
   geom_smooth(method = lm) +
   labs(title = "Correlation of Red Minus Green Index With Photosynthetic Efficiency",
        y = "Fv/Fm") +
-  stat_cor(aes(label = paste(after_stat(rr.label), after_stat(p.label), sep = "~`,`~")),
-           label.x = 35, label.y = 200)
+  theme_classic() +
+  theme(
+    plot.title = element_text(size = 25, color = "green"),      # Changes main title size
+    axis.title = element_text(size = 22),      # Changes both X and Y axis labels size
+    axis.text = element_text(size = 18)        # Changes both X and Y axis tick marks size
+  ) +
+  stat_cor(aes(label = paste(after_stat(rr.label), after_stat(p.label), sep = "~`,`~")), #Adds R^2 and P value
+           label.x = 35, label.y = 0.3, size = 6)
+red_minus_green
+
+
+red_minus_green <- red_minus_green + #adds color ranges
+  annotate("rect",
+           xmin = -Inf, xmax = Inf,
+           ymin = 0.5, ymax = Inf,
+           fill = "forestgreen", alpha = 0.15) +
+
+  annotate("rect",
+           xmin = -Inf, xmax = Inf,
+           ymin = -Inf, ymax = 0.50,
+           fill = "tomato", alpha = 0.15)
+
+bands <- data.frame(
+  ymin = c(-Inf, 0.5),
+  ymax = c(0.50, Inf),
+  Health = factor(
+    c("Stressed", "Healthy"),
+    levels = c("Healthy", "Stressed")
+  )
+)
+red_minus_green <- red_minus_green + #adds legend
+  geom_rect(
+    data = bands,
+    aes(xmin = -Inf, xmax = Inf,
+        ymin = ymin, ymax = ymax,
+        fill = Health),
+    inherit.aes = FALSE,
+    alpha = 0.15
+  ) +
+  scale_fill_manual(
+    name = "Photosynthetic Health",
+    values = c(
+      "Healthy" = "forestgreen",
+      "Stressed" = "tomato"
+    )
+  )
 red_minus_green
 ggsave("figs/R-G_PAM.png", red_minus_green, width = 12, height = 8, units = "in")
 
 
+red_minus_blue <- ggplot(cleanrminusg, aes(`R-B`, Y)) + #red minus blue with pam r^2 
+  geom_point() +
+  geom_smooth(method = lm) +
+  labs(title = "Correlation of Red Minus Blue Index With Photosynthetic Efficiency",
+       y = "Fv/Fm") +
+  theme_classic() +
+  theme(
+    plot.title = element_text(size = 25, color = "blue"),      # Changes main title size
+    axis.title = element_text(size = 22),      # Changes both X and Y axis labels size
+    axis.text = element_text(size = 18)       # Changes both X and Y axis tick marks size
+  ) +
+  stat_cor(aes(label = paste(after_stat(rr.label), after_stat(p.label), sep = "~`,`~")), #Adds R^2 and P value
+           label.x = 60, label.y = 0.3, size = 6)
+red_minus_blue
+
+
+red_minus_blue <- red_minus_blue + #adds color ranges
+  annotate("rect",
+           xmin = -Inf, xmax = Inf,
+           ymin = 0.5, ymax = Inf,
+           fill = "forestgreen", alpha = 0.15) +
+  
+  annotate("rect",
+           xmin = -Inf, xmax = Inf,
+           ymin = -Inf, ymax = 0.50,
+           fill = "tomato", alpha = 0.15)
+
+bands <- data.frame(
+  ymin = c(-Inf, 0.5),
+  ymax = c(0.50, Inf),
+  Health = factor(
+    c("Stressed", "Healthy"),
+    levels = c("Healthy", "Stressed")
+  )
+)
+red_minus_blue <- red_minus_blue + #adds legend
+  geom_rect(
+    data = bands,
+    aes(xmin = -Inf, xmax = Inf,
+        ymin = ymin, ymax = ymax,
+        fill = Health),
+    inherit.aes = FALSE,
+    alpha = 0.15
+  ) +
+  scale_fill_manual(
+    name = "Photosynthetic Health",
+    values = c(
+      "Healthy" = "forestgreen",
+      "Stressed" = "tomato"
+    )
+  )
+red_minus_blue
+ggsave("figs/R-B_PAM.png", red_minus_blue, width = 12, height = 10, units = "in")
+
+red <- ggplot(cleanrminusg, aes(`R`, Y)) + #red 
+  geom_point() +
+  geom_smooth(method = lm) +
+  labs(title = "Correlation of Red Index With Photosynthetic Efficiency",
+       y = "Fv/Fm") +
+  theme_classic() +
+  theme(
+    plot.title = element_text(size = 25, color = "red"),      # Changes main title size
+    axis.title = element_text(size = 22),      # Changes both X and Y axis labels size
+    axis.text = element_text(size = 18)        # Changes both X and Y axis tick marks size
+  ) +
+  stat_cor(aes(label = paste(after_stat(rr.label), after_stat(p.label), sep = "~`,`~")), #Adds R^2 and P value
+           label.x = 150, label.y = 0.3, size = 6)
+red
+
+
+red <- red + #adds color ranges
+  annotate("rect",
+           xmin = -Inf, xmax = Inf,
+           ymin = 0.5, ymax = Inf,
+           fill = "forestgreen", alpha = 0.15) +
+  
+  annotate("rect",
+           xmin = -Inf, xmax = Inf,
+           ymin = -Inf, ymax = 0.50,
+           fill = "tomato", alpha = 0.15)
+
+bands <- data.frame(
+  ymin = c(-Inf, 0.5),
+  ymax = c(0.50, Inf),
+  Health = factor(
+    c("Stressed", "Healthy"),
+    levels = c("Healthy", "Stressed")
+  )
+)
+red <- red + #adds legend
+  geom_rect(
+    data = bands,
+    aes(xmin = -Inf, xmax = Inf,
+        ymin = ymin, ymax = ymax,
+        fill = Health),
+    inherit.aes = FALSE,
+    alpha = 0.15
+  ) +
+  scale_fill_manual(
+    name = "Photosynthetic Health",
+    values = c(
+      "Healthy" = "forestgreen",
+      "Stressed" = "tomato"
+    )
+  )
+red
+ggsave("figs/REDPAM.png", red, width = 12, height = 10, units = "in")
