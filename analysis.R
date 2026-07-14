@@ -158,10 +158,18 @@ correlationdata %>%
     p.value = "P-value",
     r.squared = html("R&sup2;") 
     ) %>%
+  fmt_number(
+    columns = p.value,
+    decimals = 3
+  ) %>%
+  fmt_number(
+    columns = r.squared,
+    decimals = 2
+  ) %>%
   cols_width(
-    Index ~ px(180),
-    p.value ~ px(150),
-    r.squared ~ px(100)
+    Index ~ px(90),
+    p.value ~ px(90),
+    r.squared ~ px(90)
   ) %>%
   tab_header(
     title = "Correlation of PAM Measurements with RGB Indices"
@@ -169,12 +177,12 @@ correlationdata %>%
   tab_options(
     table.border.top.style = "solid",
     table.border.bottom.style = "solid",
-    table.margin.left = px(20),
-    table.margin.right = px(20)
+    table.margin.left = px(5),
+    table.margin.right = px(5),
+    table.font.size = px(14)
   ) %>%
   opt_table_outline() %>%
-gtsave("PAM_RGB_Correlation_Table.png", vwidth = 700, vheight = 500, path = "C:/Users/kddea/Desktop/EPASeagrantCoralImages/REU_coral_color_trait_space/figs")
-
+gtsave("PAM_RGB_Correlation_Table.png", vwidth = 1650, vheight = 4800, path = "C:/Users/kddea/Desktop/EPASeagrantCoralImages/REU_coral_color_trait_space/figs")
 
 
 ##  Plotting: 
@@ -346,7 +354,8 @@ pam <- ggplot(CHROMA, aes(x = Y, y = site)) +
     axis.title = element_text(size = 22),      # Changes both X and Y axis labels size
     axis.text = element_text(size = 18),     # Changes both X and Y axis tick marks size
   ) +
-  scale_fill_viridis_d(option = "turbo")
+  scale_fill_viridis_d(option = "turbo") +
+  scale_y_discrete(limits = rev)
 pam
 
 ggsave("figs/pambysite.png", pam, width = 12, height = 8, units = "in")
@@ -411,7 +420,7 @@ rminusg <- ggplot(CHROMA, aes(x = `R-G`, y = site)) +
   geom_boxplot(aes(fill = site), alpha = 1) +
   theme_minimal() +
   geom_text(data = rminusgletter_data, 
-            aes(x = third_q + 0.4, y = site, label = Letters), # Adjust y offset as needed
+            aes(x = third_q + 0.8, y = site, label = Letters), # Adjust y offset as needed
             size = 5, fontface = "bold") + 
   labs(title = "Red Minus Green Index by Site",
        y = "Site", x = "R-G") +
@@ -421,7 +430,8 @@ rminusg <- ggplot(CHROMA, aes(x = `R-G`, y = site)) +
     axis.title = element_text(size = 22),      # Changes both X and Y axis labels size
     axis.text = element_text(size = 18)      # Changes both X and Y axis tick marks size
   ) +
-  scale_fill_viridis_d(option = "turbo")
+  scale_fill_viridis_d(option = "turbo") +
+  scale_y_discrete(limits = rev)
 rminusg
 
 ggsave("figs/rminusgbysite.png", rminusg, width = 12, height = 8, units = "in")
